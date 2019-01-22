@@ -167,7 +167,7 @@
   version = "v1.3.5"
 
 [[projects]]
-  digest = "1:704b145137b5555c6bac6a7e52875e4df8a0a1b7ea74aaae864abcab61e672b0"
+  digest = "1:60e49aaeefbedbb56b5bcb938ee1e55cc04416773ed64cb49b3f72b8f315cb02"
   name = "github.com/go-kit/kit"
   packages = [
     "log",
@@ -175,8 +175,8 @@
     "log/term",
   ]
   pruneopts = "UT"
-  revision = "4dc7be5d2d12881735283bcab7352178e190fc71"
-  version = "v0.6.0"
+  revision = "ca4112baa34cb55091301bdc13b1420a122b1b9e"
+  version = "v0.7.0"
 
 [[projects]]
   digest = "1:4062bc6de62d73e2be342243cf138cf499b34d558876db8d9430e2149388a4d8"
@@ -813,13 +813,6 @@
   revision = "bea94bb476ccecfbd31b12ed493a971bdb8c904b"
 
 [[projects]]
-  digest = "1:605b6546f3f43745695298ec2d342d3e952b6d91cdf9f349bea9315f677d759f"
-  name = "github.com/tendermint/btcd"
-  packages = ["btcec"]
-  pruneopts = "UT"
-  revision = "e5840949ff4fff0c56f9b6a541e22b63581ea9df"
-
-[[projects]]
   branch = "master"
   digest = "1:087aaa7920e5d0bf79586feb57ce01c35c830396ab4392798112e8aae8c47722"
   name = "github.com/tendermint/ed25519"
@@ -832,15 +825,15 @@
   revision = "d8387025d2b9d158cf4efb07e7ebf814bcce2057"
 
 [[projects]]
-  digest = "1:2c971a45c89ca2ccc735af50919cdee05fbdc54d4bf50625073693300e31ead8"
+  digest = "1:21521550d7ff880eea34405a59287f6be365077b125dc8b5c371f0a4f486ee88"
   name = "github.com/tendermint/go-amino"
   packages = ["."]
   pruneopts = "UT"
-  revision = "faa6e731944e2b7b6a46ad202902851e8ce85bee"
-  version = "v0.12.0"
+  revision = "756cfbe0ef0daff7ad0a82dac8b35891a212aafa"
+  version = "v0.11.1"
 
 [[projects]]
-  digest = "1:e8e52fa7bb589bb2db447e3e7576810952cfd9addc126b3bd7be08add3930895"
+  digest = "1:d604906c8d86e99602f5793e3a809e89498d2471a32aa6bcb947f901215e7f53"
   name = "github.com/tendermint/tendermint"
   packages = [
     "abci/types",
@@ -852,8 +845,8 @@
     "libs/log",
   ]
   pruneopts = "UT"
-  revision = "0c9c3292c918617624f6f3fbcd95eceade18bcd5"
-  version = "v0.25.0"
+  revision = "05a76fb517f50da27b4bfcdc7b4cf185fc61eff6"
+  version = "v0.22.5"
 
 [[projects]]
   branch = "master"
@@ -956,7 +949,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:6623975fef6c398f039272428fb0ba1a579cb07da12b04481ec2cd48e271b031"
+  digest = "1:535b70ff2423b910383d79c5be670505c5e1a9ac01a7008aee5fad0211e313af"
   name = "golang.org/x/sys"
   packages = [
     "cpu",
@@ -964,7 +957,7 @@
     "windows",
   ]
   pruneopts = "UT"
-  revision = "770c60269bf0ef965e9e7ac8bedcb6bca2a1cefd"
+  revision = "054c452bb702e465e95ce8e7a3d9a6cf0cd1188d"
 
 [[projects]]
   digest = "1:436b24586f8fee329e0dd65fd67c817681420cda1d7f934345c13fe78c212a73"

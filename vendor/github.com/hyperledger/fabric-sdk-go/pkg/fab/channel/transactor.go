@@ -111,11 +111,7 @@ func orderersFromChannelCfg(ctx context.Client, cfg fab.ChannelCfg) ([]fab.Order
 //will return empty list when orderers are not found in endpoint config
 func orderersFromChannel(ctx context.Client, channelID string) ([]fab.Orderer, error) {
 
-	chNetworkConfig, ok := ctx.EndpointConfig().ChannelConfig(channelID)
-	if !ok {
-		return []fab.Orderer{}, nil
-	}
-
+	chNetworkConfig := ctx.EndpointConfig().ChannelConfig(channelID)
 	orderers := []fab.Orderer{}
 	for _, chOrderer := range chNetworkConfig.Orderers {
 
@@ -147,14 +143,14 @@ func orderersByTarget(ctx context.Client) (map[string]fab.OrdererConfig, error) 
 }
 
 // CreateTransactionHeader creates a Transaction Header based on the current context.
-func (t *Transactor) CreateTransactionHeader() (fab.TransactionHeader, error) {
+func (t *Transactor) CreateTransactionHeader(opts ...fab.TxnHeaderOpt) (fab.TransactionHeader, error) {
 
 	ctx, ok := contextImpl.RequestClientContext(t.reqCtx)
 	if !ok {
 		return nil, errors.New("failed get client context from reqContext for txn Header")
 	}
 
-	txh, err := txn.NewHeader(ctx, t.ChannelID)
+	txh, err := txn.NewHeader(ctx, t.ChannelID, opts...)
 	if err != nil {
 		return nil, errors.WithMessage(err, "new transaction ID failed")
 	}

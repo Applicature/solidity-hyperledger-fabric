@@ -49,3 +49,4 @@ examples/e2e_cli/crypto-config/*
 # Node artifacts from installing web3 for integration tests
 node_modules
 package-lock.json
+vendor

@@ -2,20 +2,24 @@
 #SPDX-License-Identifier: Apache-2.0
 
 [[constraint]]
-  version = "0.18.0"
+  version = "0.23.0"
   name = "github.com/hyperledger/burrow"
 
 [[constraint]]
   version = "v1.3.0"
   name = "github.com/hyperledger/fabric"
 
-[[constraint]]
-  branch = "master"
-  name = "github.com/onsi/gomega"
+#[[constraint]]
+#  branch = "master"
+#  name = "github.com/onsi/gomega"
 
 [[constraint]]
   branch = "master"
   name = "github.com/hyperledger/fabric-sdk-go"
+
+[[constraint]]
+  name = "github.com/fsouza/go-dockerclient"
+  version = "1.3.5"
 
 #Constraints from Burrow
 [[override]]
@@ -27,13 +31,29 @@
   name = "github.com/tendermint/go-crypto"
 
 #Constraints from Fabric
+[[override]]
+  version = "1.13.0"
+  name = "google.golang.org/grpc"
+
+[[override]]
+  revision = "292b43bbf7cb8d35ddf40f8d5100ef3837cced3f"
+  name = "golang.org/x/net"
+
 [[constraint]]
   revision = "a3b6351eb1ff8e1bfa30b2f55d7e282186ed8fee"
   name = "github.com/onsi/ginkgo"
 
+[[constraint]]
+  name = "github.com/onsi/gomega"
+  version = "1.4.2"
+
+#[[override]]
+#  revision = "57142e89befe90977da6dce7762f9fcc70f28da1"
+#  name = "github.com/docker/docker"
+
 [[override]]
-  revision = "57142e89befe90977da6dce7762f9fcc70f28da1"
   name = "github.com/docker/docker"
+  branch = "master"
 
 [[override]]
   version = "0.8.0"
@@ -68,6 +88,11 @@
   revision = "ae68e2d4c00fed4943b5f6698d504a5fe083da8a"
   name = "github.com/prometheus/procfs"
 
+#Constraints from go-dockerclient
+[[override]]
+  name = "github.com/docker/libnetwork"
+  branch = "master"
+
 [prune]
   go-tests = true
   unused-packages = true
@@ -77,7 +102,7 @@
       unused-packages = false
       non-go = true
 
-  [[prune.project]]
-      name = "github.com/onsi/gomega"
-      unused-packages = false
-      non-go = true
+#  [[prune.project]]
+#      name = "github.com/onsi/gomega"
+#      unused-packages = false
+#      non-go = true

@@ -11,9 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/hyperledger/burrow/account"
-	"github.com/hyperledger/burrow/execution/evm/events"
+	"github.com/hyperledger/burrow/crypto"
+	"github.com/hyperledger/burrow/execution/exec"
 	evm_event "github.com/hyperledger/fabric-chaincode-evm/event"
 	mocks "github.com/hyperledger/fabric-chaincode-evm/mocks/evmcc"
 
@@ -26,7 +25,7 @@ var _ = Describe("Event", func() {
 	var (
 		eventManager evm_event.EventManager
 		mockStub     *mocks.MockStub
-		addr         account.Address
+		addr         crypto.Address
 	)
 
 	BeforeEach(func() {
@@ -34,22 +33,21 @@ var _ = Describe("Event", func() {
 		eventManager = *evm_event.NewEventManager(mockStub)
 
 		var err error
-		addr, err = account.AddressFromBytes([]byte("0000000000000address"))
+		addr, err = crypto.AddressFromBytes([]byte("0000000000000address"))
 		Expect(err).ToNot(HaveOccurred())
 	})
 
 	Describe("Publish", func() {
 		var (
 			ctx     context.Context
-			message events.EventDataLog
+			message exec.LogEvent
 			tags    map[string]interface{}
 		)
 
 		BeforeEach(func() {
 			ctx = context.Background()
-			message = events.EventDataLog{
+			message = exec.LogEvent{
 				Address: addr,
-				Height:  0,
 			}
 			tags = map[string]interface{}{"EventID": fmt.Sprintf("Log/%s", addr)}
 		})
@@ -96,7 +94,7 @@ var _ = Describe("Event", func() {
 				err := eventManager.Publish(ctx, message, tags) //passing events.EventDataLog instead of *events.EventDataLog
 				Expect(err).To(HaveOccurred())
 
-				msg1 := make(chan events.EventDataLog) //passing chan events.EventDataLog instead of *events.EventDataLog
+				msg1 := make(chan exec.LogEvent) //passing chan events.EventDataLog instead of *events.EventDataLog
 				err = eventManager.Publish(ctx, msg1, tags)
 				Expect(err).To(HaveOccurred())
 			})
@@ -106,20 +104,18 @@ var _ = Describe("Event", func() {
 	Describe("Flush", func() {
 		var (
 			ctx      context.Context
-			message1 events.EventDataLog
-			message2 events.EventDataLog
+			message1 exec.LogEvent
+			message2 exec.LogEvent
 			tags     map[string]interface{}
 		)
 
 		BeforeEach(func() {
 			ctx = context.Background()
-			message1 = events.EventDataLog{
+			message1 = exec.LogEvent{
 				Address: addr,
-				Height:  0,
 			}
-			message2 = events.EventDataLog{
+			message2 = exec.LogEvent{
 				Address: addr,
-				Height:  1,
 			}
 			tags = map[string]interface{}{"EventID": fmt.Sprintf("Log/%s", addr)}
 		})
@@ -131,7 +127,7 @@ var _ = Describe("Event", func() {
 				err = eventManager.Flush("Chaincode event")
 				Expect(err).ToNot(HaveOccurred())
 
-				messagePayloads := []events.EventDataLog{message1}
+				messagePayloads := []exec.LogEvent{message1}
 				expectedPayload, err := json.Marshal(messagePayloads)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -140,7 +136,7 @@ var _ = Describe("Event", func() {
 				Expect(setEventName).To(Equal("Chaincode event"))
 				Expect(setEventPayload).To(Equal(expectedPayload))
 
-				var unmarshaledPayloads []events.EventDataLog
+				var unmarshaledPayloads []exec.LogEvent
 				err = json.Unmarshal(setEventPayload, &unmarshaledPayloads)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(unmarshaledPayloads).To(Equal(messagePayloads))
@@ -156,7 +152,7 @@ var _ = Describe("Event", func() {
 				err = eventManager.Flush("Chaincode event")
 				Expect(err).ToNot(HaveOccurred())
 
-				messagePayloads := []events.EventDataLog{message1, message2}
+				messagePayloads := []exec.LogEvent{message1, message2}
 				expectedPayload, err := json.Marshal(messagePayloads)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -165,7 +161,7 @@ var _ = Describe("Event", func() {
 				Expect(setEventName).To(Equal("Chaincode event"))
 				Expect(setEventPayload).To(Equal(expectedPayload))
 
-				var unmarshaledPayloads []events.EventDataLog
+				var unmarshaledPayloads []exec.LogEvent
 				err = json.Unmarshal(setEventPayload, &unmarshaledPayloads)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(unmarshaledPayloads).To(Equal(messagePayloads))

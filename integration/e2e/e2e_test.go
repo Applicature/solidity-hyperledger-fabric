@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	docker "github.com/fsouza/go-dockerclient"
+	"github.com/fsouza/go-dockerclient"
 	"github.com/hyperledger/fabric-chaincode-evm/integration/helpers"
 	"github.com/hyperledger/fabric/integration/nwo"
 	"github.com/hyperledger/fabric/integration/nwo/commands"
@@ -56,6 +56,7 @@ var _ = Describe("EndToEnd", func() {
 			Policy:  `AND ('Org1MSP.member','Org2MSP.member')`,
 		}
 		network = nwo.New(nwo.BasicSolo(), testDir, client, 30000, components)
+
 		network.GenerateConfigTree()
 		network.Bootstrap()
 

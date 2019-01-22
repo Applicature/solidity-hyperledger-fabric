@@ -10,20 +10,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/hyperledger/burrow/execution/errors"
+	"github.com/hyperledger/burrow/execution/evm"
+	"github.com/hyperledger/burrow/execution/exec"
 
-	"github.com/hyperledger/burrow/execution/evm/events"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 )
 
 type EventManager struct {
 	stub       shim.ChaincodeStubInterface
-	EventCache []events.EventDataLog
+	EventCache []exec.LogEvent
+	evm.EventSink
 }
 
 func NewEventManager(stub shim.ChaincodeStubInterface) *EventManager {
 	return &EventManager{
 		stub:       stub,
-		EventCache: []events.EventDataLog{},
+		EventCache: []exec.LogEvent{},
 	}
 }
 
@@ -44,14 +47,29 @@ func (evmgr *EventManager) Publish(ctx context.Context, message interface{}, tag
 		return fmt.Errorf("type mismatch: expected string but received %T", tags["EventID"])
 	}
 
-	msg, ok := message.(*events.EventDataLog)
+	msg, ok := message.(*exec.LogEvent)
 	if !ok {
-		return fmt.Errorf("type mismatch: expected *events.EventDataLog but received %T", message)
+		return fmt.Errorf("type mismatch: expected *exec.LogEvent but received %T", message)
 	}
 
 	//Burrow EVM emits other events related to state (such as account call) as well, but we are only interested in log events
 	if evID[0:3] == "Log" {
-		evmgr.EventCache = append(evmgr.EventCache, *msg)
+		//evmgr.EventCache = append(evmgr.EventCache, *msg)
+		return evmgr.Log(msg)
 	}
+	return nil
+}
+
+func (evmgr *EventManager) Call(call *exec.CallEvent, exception *errors.Exception) error {
+	//txe.Append(&Event{
+	//	Header: txe.Header(TypeCall, EventStringAccountCall(call.CallData.Callee), exception),
+	//	Call:   call,
+	//})
+	return nil
+}
+
+func (evmgr *EventManager) Log(log *exec.LogEvent) error {
+	evmgr.EventCache = append(evmgr.EventCache, *log)
+
 	return nil
 }

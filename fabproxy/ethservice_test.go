@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hyperledger/burrow/crypto"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,9 +19,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/hyperledger/burrow/account"
 	"github.com/hyperledger/burrow/binary"
-	"github.com/hyperledger/burrow/execution/evm/events"
+	"github.com/hyperledger/burrow/execution/exec"
 	"github.com/hyperledger/fabric-chaincode-evm/fabproxy"
 	fabproxy_mocks "github.com/hyperledger/fabric-chaincode-evm/mocks/fabproxy"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
@@ -405,23 +405,22 @@ var _ = Describe("Ethservice", func() {
 
 		Context("when the transaction has associated events", func() {
 			var (
-				msg          events.EventDataLog
+				msg          exec.LogEvent
 				eventPayload []byte
 				eventBytes   []byte
 			)
 
 			BeforeEach(func() {
 				var err error
-				addr, err := account.AddressFromBytes([]byte(sampleAddress))
+				addr, err := crypto.AddressFromBytes([]byte(sampleAddress))
 				Expect(err).ToNot(HaveOccurred())
 
-				msg = events.EventDataLog{
+				msg = exec.LogEvent{
 					Address: addr,
 					Topics:  []binary.Word256{binary.RightPadWord256([]byte("sample-topic-1")), binary.RightPadWord256([]byte("sample-topic2"))},
 					Data:    []byte("sample-data"),
-					Height:  0,
 				}
-				events := []events.EventDataLog{msg}
+				events := []exec.LogEvent{msg}
 				eventPayload, err = json.Marshal(events)
 				Expect(err).ToNot(HaveOccurred())
 

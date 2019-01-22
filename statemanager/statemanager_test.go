@@ -9,9 +9,10 @@ package statemanager_test
 import (
 	"encoding/hex"
 	"errors"
-
-	"github.com/hyperledger/burrow/account"
+	"github.com/hyperledger/burrow/acm"
 	"github.com/hyperledger/burrow/binary"
+	"github.com/hyperledger/burrow/crypto"
+
 	"github.com/hyperledger/fabric-chaincode-evm/mocks/evmcc"
 	"github.com/hyperledger/fabric-chaincode-evm/statemanager"
 
@@ -24,7 +25,7 @@ var _ = Describe("Statemanager", func() {
 	var (
 		sm            statemanager.StateManager
 		mockStub      *evmcc.MockStub
-		addr          account.Address
+		addr          crypto.Address
 		fakeGetLedger map[string][]byte
 		fakePutLedger map[string][]byte
 	)
@@ -34,7 +35,7 @@ var _ = Describe("Statemanager", func() {
 		sm = statemanager.NewStateManager(mockStub)
 
 		var err error
-		addr, err = account.AddressFromBytes([]byte("0000000000000address"))
+		addr, err = crypto.AddressFromBytes([]byte("0000000000000address"))
 		Expect(err).ToNot(HaveOccurred())
 		fakeGetLedger = make(map[string][]byte)
 		fakePutLedger = make(map[string][]byte)
@@ -43,6 +44,7 @@ var _ = Describe("Statemanager", func() {
 		// This is more consistent with the behavior fo the ledger
 		mockStub.PutStateStub = func(key string, value []byte) error {
 			fakePutLedger[key] = value
+
 			return nil
 		}
 
@@ -58,19 +60,27 @@ var _ = Describe("Statemanager", func() {
 
 	Describe("GetAccount", func() {
 		It("returns the account associated with the address", func() {
-			fakeGetLedger[addr.String()] = []byte("account code")
+			expectedAcct := acm.Account{
+				Address:     addr,
+				Code:        []byte("account code"),
+				Permissions: statemanager.ContractPerms,
+				PublicKey:   crypto.PublicKey{},
+			}
 
-			expectedAcct := account.ConcreteAccount{
-				Address: addr,
-				Code:    []byte("account code"),
-			}.MutableAccount()
+			serializedAccount, err := expectedAcct.Marshal()
 
-			expectedAcct.SetPermissions(statemanager.ContractPerms)
+			fakeGetLedger[addr.String()] = serializedAccount
+
+			secondAccount := acm.Account{}
+
+			err = secondAccount.Unmarshal(serializedAccount)
+
+			Expect(err).ToNot(HaveOccurred())
 
 			acct, err := sm.GetAccount(addr)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(acct).To(Equal(expectedAcct))
+			Expect(*acct).To(Equal(secondAccount))
 		})
 
 		Context("when no account exists", func() {
@@ -78,7 +88,9 @@ var _ = Describe("Statemanager", func() {
 				acct, err := sm.GetAccount(addr)
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(acct).To(Equal(account.ConcreteAccount{}.Account()))
+				var nulledAccount *acm.Account = nil
+
+				Expect(acct).To(Equal(nulledAccount))
 			})
 		})
 
@@ -91,7 +103,7 @@ var _ = Describe("Statemanager", func() {
 				acct, err := sm.GetAccount(addr)
 				Expect(err).To(HaveOccurred())
 
-				Expect(acct).To(Equal(account.ConcreteAccount{}.Account()))
+				Expect(acct).To(BeNil())
 			})
 		})
 	})
@@ -106,8 +118,8 @@ var _ = Describe("Statemanager", func() {
 		It("returns the value associated with the key", func() {
 			fakeGetLedger[addr.String()+hex.EncodeToString(key.Bytes())] = expectedVal.Bytes()
 
-			val, err := sm.GetStorage(addr, key)
-			Expect(err).ToNot(HaveOccurred())
+			val := sm.GetStorage(addr, key)
+			Expect(sm.Error()).ToNot(HaveOccurred())
 
 			Expect(val).To(Equal(expectedVal))
 		})
@@ -118,8 +130,9 @@ var _ = Describe("Statemanager", func() {
 			})
 
 			It("returns an error", func() {
-				val, err := sm.GetStorage(addr, key)
-				Expect(err).To(HaveOccurred())
+				val := sm.GetStorage(addr, key)
+
+				Expect(sm.Error()).To(HaveOccurred())
 
 				Expect(val).To(Equal(binary.Word256{}))
 			})
@@ -133,67 +146,170 @@ var _ = Describe("Statemanager", func() {
 
 				fakeGetLedger[addr.String()+hex.EncodeToString(key.Bytes())] = initialVal.Bytes()
 
-				val, err := sm.GetStorage(addr, key)
-				Expect(err).ToNot(HaveOccurred())
+				val := sm.GetStorage(addr, key)
+				Expect(sm.Error()).ToNot(HaveOccurred())
 				Expect(val).To(Equal(initialVal))
 
-				err = sm.SetStorage(addr, key, updatedVal)
-				Expect(err).ToNot(HaveOccurred())
+				sm.SetStorage(addr, key, updatedVal)
+				Expect(sm.Error()).ToNot(HaveOccurred())
 			})
 
 			It("returns the account that was previously written in the same tx", func() {
-				val, err := sm.GetStorage(addr, key)
-				Expect(err).ToNot(HaveOccurred())
+				val := sm.GetStorage(addr, key)
+				Expect(sm.Error()).ToNot(HaveOccurred())
 				Expect(val).To(Equal(updatedVal))
 			})
 		})
 	})
 
-	Describe("UpdateAccount", func() {
+	Describe("GetBalance", func() {
+		Context("when account not exists", func() {
+			It("returns zero", func() {
+				balance := sm.GetBalance(addr)
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(balance).To(Equal(uint64(0)))
+			})
+		})
+
+		Context("when account exists", func() {
+			It("with unset balance", func() {
+				account := acm.Account{Address: addr}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				balance := sm.GetBalance(addr)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(balance).To(Equal(uint64(0)))
+			})
+
+			It("with set balance", func() {
+				account := acm.Account{Address: addr, Balance: uint64(10002123123)}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				balance := sm.GetBalance(addr)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(balance).To(Equal(uint64(10002123123)))
+			})
+		})
+	})
+
+	Describe("Exists", func() {
+		Context("when account not exists", func() {
+			It("returns error", func() {
+				isExists := sm.Exists(addr)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(isExists).To(Equal(false))
+			})
+		})
+
+		Context("when account exists", func() {
+			It("with unset balance", func() {
+				account := acm.Account{Address: addr}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				isExists := sm.Exists(addr)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(isExists).To(Equal(true))
+			})
+		})
+	})
+
+	Describe("GetCode", func() {
+		Context("when account not exists", func() {
+			It("returns nil", func() {
+				code := sm.GetCode(addr)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(code).To(BeNil())
+			})
+		})
+
+		Context("when account exists", func() {
+			It("with unset code", func() {
+				account := acm.Account{Address: addr}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				code := sm.GetCode(addr)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(code).To(Equal(acm.Bytecode{}))
+			})
+
+			It("with set code", func() {
+				account := acm.Account{Address: addr, Code: []byte("account code")}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				code := sm.GetCode(addr)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(code).To(BeEquivalentTo("account code"))
+			})
+		})
+	})
+
+	Describe("CreateAccount", func() {
 		var initialCode []byte
 		BeforeEach(func() {
-			initialCode = []byte("account code")
+			account := acm.Account{Code: []byte("account code")}
+
+			serializedAccount, _ := account.Marshal()
+
+			initialCode = serializedAccount
 		})
 
 		Context("when the account didn't exist", func() {
 			It("creates the account", func() {
+				Expect(mockStub.PutStateCallCount()).To(Equal(0))
 
-				expectedAcct := account.ConcreteAccount{
-					Address: addr,
-					Code:    initialCode,
-				}.Account()
+				sm.CreateAccount(addr)
 
-				err := sm.UpdateAccount(expectedAcct)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(sm.Exists(addr)).To(Equal(true))
 
 				Expect(mockStub.PutStateCallCount()).To(Equal(1))
+
+				account, _ := sm.GetAccount(addr)
+
+				serializedAccount, _ := account.Marshal()
 
 				key, code := mockStub.PutStateArgsForCall(0)
 
 				Expect(key).To(Equal(addr.String()))
-				Expect(code).To(Equal(initialCode))
+				Expect(code).To(Equal(serializedAccount))
 			})
 		})
 
 		Context("when the account exists", func() {
-			It("updates the account", func() {
-				fakeGetLedger[addr.String()] = initialCode
+			It("create the account", func() {
+				account := acm.Account{Address: addr, Code: initialCode}
 
-				updatedCode := []byte("updated account code")
-				updatedAccount := account.ConcreteAccount{
-					Address: addr,
-					Code:    updatedCode,
-				}.Account()
+				fakeGetLedger[addr.String()], _ = account.Marshal()
 
-				err := sm.UpdateAccount(updatedAccount)
-				Expect(err).ToNot(HaveOccurred())
+				sm.CreateAccount(addr)
 
-				Expect(mockStub.PutStateCallCount()).To(Equal(1))
-				putAddr, putVal := mockStub.PutStateArgsForCall(0)
-				Expect(putAddr).To(Equal(addr.String()))
-				Expect(putVal).To(Equal(updatedCode))
+				Expect(mockStub.PutStateCallCount()).To(Equal(0))
+
+				Expect(sm.Error()).To(HaveOccurred())
 			})
-
 		})
 
 		Context("when stub throws an error", func() {
@@ -202,13 +318,87 @@ var _ = Describe("Statemanager", func() {
 			})
 
 			It("returns an error", func() {
-				expectedAcct := account.ConcreteAccount{
-					Address: addr,
-					Code:    initialCode,
-				}.Account()
+				sm.CreateAccount(addr)
 
-				err := sm.UpdateAccount(expectedAcct)
-				Expect(err).To(HaveOccurred())
+				Expect(sm.Error()).To(HaveOccurred())
+			})
+		})
+	})
+
+	Describe("InitCode", func() {
+		var initialCode []byte
+		BeforeEach(func() {
+			account := acm.Account{Code: []byte("account code")}
+
+			serializedAccount, _ := account.Marshal()
+
+			initialCode = serializedAccount
+		})
+
+		Context("when account just created", func() {
+			It("successfully init code", func() {
+				Expect(mockStub.PutStateCallCount()).To(Equal(0))
+
+				sm.CreateAccount(addr)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+				Expect(mockStub.PutStateCallCount()).To(Equal(1))
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(sm.Exists(addr)).To(Equal(true))
+
+				account, _ := sm.GetAccount(addr)
+
+				sm.InitCode(addr, initialCode)
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(2))
+
+				account.Code = initialCode
+
+				serializedAccount, _ := account.Marshal()
+
+				key, code := mockStub.PutStateArgsForCall(1)
+
+				Expect(key).To(Equal(addr.String()))
+				Expect(code).To(Equal(serializedAccount))
+			})
+		})
+
+		Context("when the account exists without Code specified", func() {
+			It("return errro", func() {
+				account := acm.Account{Address: addr}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				sm.InitCode(addr, initialCode)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("when the account exists with code specified", func() {
+			It("return errro", func() {
+				account := acm.Account{Address: addr, Code: initialCode}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				sm.InitCode(addr, initialCode)
+
+				Expect(sm.Error()).To(HaveOccurred())
+			})
+		})
+
+		Context("when the account exists with code specified", func() {
+			It("return errro", func() {
+				account := acm.Account{Address: addr, Code: initialCode}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				sm.InitCode(addr, initialCode)
+
+				Expect(sm.Error()).To(HaveOccurred())
 			})
 		})
 	})
@@ -216,10 +406,14 @@ var _ = Describe("Statemanager", func() {
 	Describe("RemoveAccount", func() {
 		Context("when the account existed previously", func() {
 			It("removes the account", func() {
-				fakeGetLedger[addr.String()] = []byte("account code")
+				account := acm.Account{}
 
-				err := sm.RemoveAccount(addr)
-				Expect(err).ToNot(HaveOccurred())
+				serializedAccount, _ := account.Marshal()
+
+				fakeGetLedger[addr.String()] = serializedAccount
+
+				sm.RemoveAccount(addr)
+				Expect(sm.Error()).ToNot(HaveOccurred())
 
 				Expect(mockStub.DelStateCallCount()).To(Equal(1))
 				delAddr := mockStub.DelStateArgsForCall(0)
@@ -228,13 +422,11 @@ var _ = Describe("Statemanager", func() {
 		})
 
 		Context("when the account did not exists previously", func() {
-			It("does not return an error", func() {
-				err := sm.RemoveAccount(addr)
-				Expect(err).ToNot(HaveOccurred())
+			It("returns an error", func() {
+				sm.RemoveAccount(addr)
+				Expect(sm.Error()).To(HaveOccurred())
 
-				Expect(mockStub.DelStateCallCount()).To(Equal(1))
-				delAddr := mockStub.DelStateArgsForCall(0)
-				Expect(delAddr).To(Equal(addr.String()))
+				Expect(mockStub.DelStateCallCount()).To(Equal(0))
 			})
 		})
 
@@ -244,8 +436,8 @@ var _ = Describe("Statemanager", func() {
 			})
 
 			It("returns an error", func() {
-				err := sm.RemoveAccount(addr)
-				Expect(err).To(HaveOccurred())
+				sm.RemoveAccount(addr)
+				Expect(sm.Error()).To(HaveOccurred())
 			})
 		})
 	})
@@ -270,8 +462,8 @@ var _ = Describe("Statemanager", func() {
 
 				updatedVal := binary.LeftPadWord256([]byte("updated-storage-value"))
 
-				err = sm.SetStorage(addr, key, updatedVal)
-				Expect(err).ToNot(HaveOccurred())
+				sm.SetStorage(addr, key, updatedVal)
+				Expect(sm.Error()).ToNot(HaveOccurred())
 
 				Expect(mockStub.PutStateCallCount()).To(Equal(2))
 				putKey, putVal := mockStub.PutStateArgsForCall(1)
@@ -282,8 +474,8 @@ var _ = Describe("Statemanager", func() {
 
 		Context("when the key does not exist", func() {
 			It("creates the key value pair", func() {
-				err := sm.SetStorage(addr, key, initialVal)
-				Expect(err).ToNot(HaveOccurred())
+				sm.SetStorage(addr, key, initialVal)
+				Expect(sm.Error()).ToNot(HaveOccurred())
 
 				Expect(mockStub.PutStateCallCount()).To(Equal(1))
 				putKey, putVal := mockStub.PutStateArgsForCall(0)
@@ -298,12 +490,188 @@ var _ = Describe("Statemanager", func() {
 			})
 
 			It("returns an error", func() {
-				err := sm.SetStorage(addr, key, initialVal)
-				Expect(err).To(HaveOccurred())
+				sm.SetStorage(addr, key, initialVal)
+				Expect(sm.Error()).To(HaveOccurred())
 
 				val, err := mockStub.GetState(compKey)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(val).To(BeEmpty())
+			})
+		})
+	})
+
+	Describe("AddToBalance", func() {
+		Context("for new account", func() {
+			It("first time call of AddToBalance", func() {
+				Expect(mockStub.PutStateCallCount()).To(Equal(0))
+
+				sm.CreateAccount(addr)
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(0)))
+
+				sm.AddToBalance(addr, 102345)
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(2))
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(102345)))
+			})
+
+			It("second time call of AddToBalance", func() {
+				Expect(mockStub.PutStateCallCount()).To(Equal(0))
+
+				sm.CreateAccount(addr)
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(0)))
+
+				sm.AddToBalance(addr, 102345)
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(2))
+
+				sm.AddToBalance(addr, 102)
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(3))
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(102345  + 102)))
+			})
+		})
+
+		Context("when the account exists", func() {
+			It("first time call of AddToBalance", func() {
+				account := acm.Account{Address: addr, Balance: 123}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(0))
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(123)))
+
+				sm.AddToBalance(addr, 102345)
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(1))
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(123 + 102345)))
+			})
+
+			It("second time call of AddToBalance", func() {
+				account := acm.Account{Address: addr, Balance: 123}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(123)))
+
+				sm.AddToBalance(addr, 102345)
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(1))
+
+				sm.AddToBalance(addr, 102)
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(2))
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(123 + 102345 + 102)))
+			})
+		})
+	})
+
+	Describe("SubtractFromBalance", func() {
+		Context("for new account", func() {
+			It("first time call of AddToBalance", func() {
+				Expect(mockStub.PutStateCallCount()).To(Equal(0))
+
+				sm.CreateAccount(addr)
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(0)))
+
+				sm.SubtractFromBalance(addr, 102345)
+
+				Expect(sm.Error()).To(HaveOccurred())
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(1))
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(0)))
+			})
+
+			It("second time call of AddToBalance", func() {
+				Expect(mockStub.PutStateCallCount()).To(Equal(0))
+
+				sm.CreateAccount(addr)
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(0)))
+
+				sm.SubtractFromBalance(addr, 102345)
+
+				Expect(sm.Error()).To(HaveOccurred())
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(1))
+
+				sm.SubtractFromBalance(addr, 102)
+
+				Expect(sm.Error()).To(HaveOccurred())
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(1))
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(0)))
+			})
+		})
+
+		Context("when the account exists", func() {
+			It("first time call of AddToBalance", func() {
+				account := acm.Account{Address: addr, Balance: 123}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(0))
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(123)))
+
+				sm.SubtractFromBalance(addr, 1)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(1))
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(123 - 1)))
+			})
+
+			It("second time call of AddToBalance", func() {
+				account := acm.Account{Address: addr, Balance: 123}
+
+				fakeGetLedger[addr.String()], _ = account.Marshal()
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(123)))
+
+				sm.SubtractFromBalance(addr, 10)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(1))
+
+				sm.SubtractFromBalance(addr, 102)
+
+				Expect(sm.Error()).ToNot(HaveOccurred())
+
+				fakeGetLedger[addr.String()] = fakePutLedger[addr.String()]
+
+				Expect(mockStub.PutStateCallCount()).To(Equal(2))
+
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(123 - 10 - 102)))
 			})
 		})
 	})

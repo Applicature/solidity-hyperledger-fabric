@@ -14,10 +14,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hyperledger/burrow/acm"
+
+	"github.com/hyperledger/burrow/crypto"
+
 	"github.com/gogo/protobuf/proto"
-	"github.com/hyperledger/burrow/account"
 	"github.com/hyperledger/burrow/binary"
-	"github.com/hyperledger/burrow/execution/evm/events"
+	"github.com/hyperledger/burrow/execution/exec"
 	evm "github.com/hyperledger/fabric-chaincode-evm/evmcc"
 	evmcc_mocks "github.com/hyperledger/fabric-chaincode-evm/mocks/evmcc"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
@@ -114,34 +117,39 @@ AiEA0GxTPOXVHo0gJpMbHc9B73TL5ZfDhujoDyjb8DToWPQ=
 
 		It("will create and store the runtime bytecode from the deploy bytecode", func() {
 			// zero address, and deploy code is contract creation
-			stub.GetArgsReturns([][]byte{[]byte(account.ZeroAddress.String()), deployCode})
+			stub.GetArgsReturns([][]byte{[]byte(crypto.ZeroAddress.String()), deployCode})
 			res := evmcc.Invoke(stub)
 			Expect(res.Status).To(Equal(int32(shim.OK)))
 
 			// First PutState Call is to store the current sequence number
-			Expect(stub.PutStateCallCount()).To(Equal(2))
-			key, value := stub.PutStateArgsForCall(1)
+			Expect(stub.PutStateCallCount()).To(Equal(4))
+			key, value := stub.PutStateArgsForCall(3)
+
+			account := acm.Account{}
+
+			account.Unmarshal(value)
 
 			Expect(strings.ToLower(key)).To(Equal(strings.ToLower(string(res.Payload))))
-			Expect(hex.EncodeToString(value)).To(Equal(runtimeCode))
+			Expect(hex.EncodeToString(account.Code)).To(Equal(runtimeCode))
 		})
 
 		Context("when a contract has already been deployed", func() {
 			var (
-				contractAddress account.Address
+				contractAddress crypto.Address
 				SET             = "60fe47b1"
 				GET             = "6d4ce63c"
 			)
 
 			BeforeEach(func() {
 				// zero address, and deploy code is contract creation
-				stub.GetArgsReturns([][]byte{[]byte(account.ZeroAddress.String()), deployCode})
+				stub.GetArgsReturns([][]byte{[]byte(crypto.ZeroAddress.String()), deployCode})
 				res := evmcc.Invoke(stub)
+
 				Expect(res.Status).To(Equal(int32(shim.OK)))
-				Expect(stub.PutStateCallCount()).To(Equal(2))
+				Expect(stub.PutStateCallCount()).To(Equal(4))
 
 				var err error
-				contractAddress, err = account.AddressFromHexString(string(res.Payload))
+				contractAddress, err = crypto.AddressFromHexString(string(res.Payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -174,7 +182,7 @@ AiEA0GxTPOXVHo0gJpMbHc9B73TL5ZfDhujoDyjb8DToWPQ=
 
 			Context("when another contract is deployed", func() {
 				BeforeEach(func() {
-					stub.GetArgsReturns([][]byte{[]byte(account.ZeroAddress.String()), deployCode})
+					stub.GetArgsReturns([][]byte{[]byte(crypto.ZeroAddress.String()), deployCode})
 				})
 				It("creates a new contract and returns another contract address", func() {
 					res := evmcc.Invoke(stub)
@@ -200,7 +208,7 @@ AiEA0GxTPOXVHo0gJpMbHc9B73TL5ZfDhujoDyjb8DToWPQ=
 		Context("when less than 2 args are given", func() {
 			Context("when only one argument is given", func() {
 				Context("when the argument is account", func() {
-					var callerAddress account.Address
+					var callerAddress crypto.Address
 
 					BeforeEach(func() {
 						stub.GetArgsReturns([][]byte{[]byte("account")})
@@ -422,24 +430,28 @@ H8GZeN2ifTyJzzGo
 				user2 = marshalCreator("TestOrg", []byte(user2Cert))
 
 				deployCode      []byte
-				contractAddress account.Address
+				contractAddress crypto.Address
 			)
 
 			BeforeEach(func() {
 				deployCode = []byte(contractByteCode + constructorArgs)
 
 				// zero address, and deploy code is contract creation
-				stub.GetArgsReturns([][]byte{[]byte(account.ZeroAddress.String()), deployCode})
+				stub.GetArgsReturns([][]byte{[]byte(crypto.ZeroAddress.String()), deployCode})
 				res := evmcc.Invoke(stub)
 				Expect(res.Status).To(Equal(int32(shim.OK)))
 
 				// Last PutState Call is to store contract runtime bytecode
 				key, value := stub.PutStateArgsForCall(stub.PutStateCallCount() - 1)
+
+				account := acm.Account{}
+				account.Unmarshal(value)
+
 				Expect(strings.ToLower(key)).To(Equal(strings.ToLower(string(res.Payload))))
-				Expect(hex.EncodeToString(value)).To(Equal(runtimeByteCode))
+				Expect(hex.EncodeToString(account.Code)).To(Equal(runtimeByteCode))
 
 				var err error
-				contractAddress, err = account.AddressFromHexString(string(res.Payload))
+				contractAddress, err = crypto.AddressFromHexString(string(res.Payload))
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -475,7 +487,7 @@ H8GZeN2ifTyJzzGo
 						stub.GetCreatorReturns(user1, nil)
 						res := evmcc.Invoke(stub)
 						Expect(res.Status).To(Equal(int32(shim.OK)))
-						Expect(stub.PutStateCallCount()).To(Equal(baseCallCount+3), "`vote` should perform 3 writes: sender.voted, sender.vote, voteCount")
+						Expect(stub.PutStateCallCount()).To(Equal(baseCallCount+4), "`vote` should perform 3 writes: sender.voted, sender.vote, voteCount")
 					})
 
 					It("sets the variables of voter 1 (user1) properly", func() {
@@ -560,11 +572,11 @@ Vc4foA7mruwjI8sEng==
 				  }*/
 
 				deployCode      = []byte("608060405234801561001057600080fd5b50610122806100206000396000f30060806040526004361060485763ffffffff7c010000000000000000000000000000000000000000000000000000000060003504166331fb1dff8114604d5780633c1b81a514606a575b600080fd5b348015605857600080fd5b506068600435602435604435609a565b005b348015607557600080fd5b50607c60e8565b60408051938452602084019290925282820152519081900360600190f35b6000839055600182905560028190556040805183815260208101839052815185927fe920a6ca2d94687457e136223552305dbabca6f28cf9c65d18efc2193a2369b0928290030190a2505050565b6000546001546002549091925600a165627a7a723058201f3b3871bfe7762e6fb776ed8b5d5533e07178b576c630cf89a7e63a7b54b57b0029")
-				contractAddress account.Address
+				contractAddress crypto.Address
 				SET             = "31fb1dff" //"setInstructor(bytes32,uint256,uint256)"
 				GET             = "3c1b81a5" //"getInstructor()"
-				msg             events.EventDataLog
-				messagePayloads []events.EventDataLog
+				msg             exec.LogEvent
+				messagePayloads []exec.LogEvent
 			)
 
 			BeforeEach(func() {
@@ -572,13 +584,13 @@ Vc4foA7mruwjI8sEng==
 				stub.GetCreatorReturns(creator, nil)
 
 				// zero address, and deploy code is contract creation
-				stub.GetArgsReturns([][]byte{[]byte(account.ZeroAddress.String()), deployCode})
+				stub.GetArgsReturns([][]byte{[]byte(crypto.ZeroAddress.String()), deployCode})
 				res := evmcc.Invoke(stub)
 				Expect(res.Status).To(Equal(int32(shim.OK)))
-				Expect(stub.PutStateCallCount()).To(Equal(2))
+				Expect(stub.PutStateCallCount()).To(Equal(4))
 
 				var err error
-				contractAddress, err = account.AddressFromHexString(string(res.Payload))
+				contractAddress, err = crypto.AddressFromHexString(string(res.Payload))
 				Expect(err).ToNot(HaveOccurred())
 
 				topics := []binary.Word256{}
@@ -600,14 +612,13 @@ Vc4foA7mruwjI8sEng==
 
 				Expect(err).ToNot(HaveOccurred())
 
-				msg = events.EventDataLog{
+				msg = exec.LogEvent{
 					Address: contractAddress,
 					Topics:  topics,
 					Data:    data,
-					Height:  0,
 				}
 
-				messagePayloads = []events.EventDataLog{msg}
+				messagePayloads = []exec.LogEvent{msg}
 			})
 
 			Context("if the method called emits event(s)", func() {
@@ -629,7 +640,7 @@ Vc4foA7mruwjI8sEng==
 					Expect(setEventName).To(Equal(SET))
 					Expect(setEventPayload).To(Equal([]byte(expectedPayload)))
 
-					var unmarshaledPayloads []events.EventDataLog
+					var unmarshaledPayloads []exec.LogEvent
 					err := json.Unmarshal(setEventPayload, &unmarshaledPayloads)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(unmarshaledPayloads).To(Equal(messagePayloads))
@@ -649,21 +660,21 @@ Vc4foA7mruwjI8sEng==
 })
 
 // TODO: This is copied from evmcc. Consider moving this to an util pkg
-func identityToAddr(id []byte) (account.Address, error) {
+func identityToAddr(id []byte) (crypto.Address, error) {
 	bl, _ := pem.Decode(id)
 	if bl == nil {
-		return account.ZeroAddress, fmt.Errorf("no pem data found")
+		return crypto.ZeroAddress, fmt.Errorf("no pem data found")
 	}
 
 	cert, err := x509.ParseCertificate(bl.Bytes)
 	if err != nil {
-		return account.ZeroAddress, fmt.Errorf("failed to parse certificate: %s", err)
+		return crypto.ZeroAddress, fmt.Errorf("failed to parse certificate: %s", err)
 	}
 
 	pubkeyBytes, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
 	if err != nil {
-		return account.ZeroAddress, fmt.Errorf("unable to marshal public key: %s", err)
+		return crypto.ZeroAddress, fmt.Errorf("unable to marshal public key: %s", err)
 	}
 
-	return account.AddressFromWord256(sha3.Sum256(pubkeyBytes)), nil
+	return crypto.AddressFromWord256(sha3.Sum256(pubkeyBytes)), nil
 }

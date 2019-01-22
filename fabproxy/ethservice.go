@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/hyperledger/burrow/execution/evm/events"
+	"github.com/hyperledger/burrow/execution/exec"
 	"go.uber.org/zap"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
@@ -234,7 +234,7 @@ func (s *ethService) GetTransactionReceipt(r *http.Request, txID *string, reply 
 			return errors.New(fmt.Sprintf("Failed to decode chaincode event: %s", err.Error()))
 		}
 
-		var eventMsgs []events.EventDataLog
+		var eventMsgs []exec.LogEvent
 		err = json.Unmarshal(chaincodeEvent.Payload, &eventMsgs)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Failed to unmarshal chaincode event payload: %s", err.Error()))

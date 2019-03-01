@@ -9,6 +9,7 @@ package statemanager_test
 import (
 	"encoding/hex"
 	"errors"
+
 	"github.com/hyperledger/burrow/acm"
 	"github.com/hyperledger/burrow/binary"
 	"github.com/hyperledger/burrow/crypto"
@@ -539,7 +540,7 @@ var _ = Describe("Statemanager", func() {
 
 				Expect(mockStub.PutStateCallCount()).To(Equal(3))
 
-				Expect(sm.GetBalance(addr)).To(Equal(uint64(102345  + 102)))
+				Expect(sm.GetBalance(addr)).To(Equal(uint64(102345 + 102)))
 			})
 		})
 

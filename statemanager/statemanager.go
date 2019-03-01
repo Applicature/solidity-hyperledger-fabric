@@ -45,7 +45,7 @@ type stateManager struct {
 	storageCache map[string]binary.Word256
 	accountCache map[string][]byte
 	error        errors.CodedError
-	readonly	bool
+	readonly     bool
 }
 
 func NewStateManager(stub shim.ChaincodeStubInterface) StateManager {
@@ -59,8 +59,8 @@ func NewStateManager(stub shim.ChaincodeStubInterface) StateManager {
 ///// ----------------------------------
 
 func (st *stateManager) NewCache(cacheOptions ...state.CacheOption) evm.Interface {
-	 newState := &stateManager{
-		stub: st.stub,
+	newState := &stateManager{
+		stub:         st.stub,
 		accountCache: st.accountCache,
 		storageCache: st.storageCache,
 	}
@@ -71,7 +71,7 @@ func (st *stateManager) NewCache(cacheOptions ...state.CacheOption) evm.Interfac
 		}
 	}
 
- 	return newState
+	return newState
 }
 
 // Stub function

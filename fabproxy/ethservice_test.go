@@ -11,10 +11,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hyperledger/burrow/crypto"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/hyperledger/burrow/crypto"
 
 	"go.uber.org/zap"
 
